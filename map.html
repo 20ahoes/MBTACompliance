@@ -1,120 +1,139 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <title>Compliance Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <title>Map with Fade & Notify</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-  <!-- Mapbox GL JS & CSS -->
+  <!-- Roboto & Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+
+  <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-  <link
-    href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css"
-    rel="stylesheet"
-  />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet"/>
 
   <style>
-    body, html { margin:0; padding:0; height:100%; }
+    body, html { margin:0; padding:0; height:100%; font-family:'Roboto',sans-serif; }
     #map { position:absolute; top:0; bottom:0; width:100%; }
+    #homeButton {
+      position:absolute; top:10px; left:10px; z-index:2;
+      padding:10px 20px; font-size:16px; font-weight:700;
+      background:rgba(255,255,255,0.9); color:#005e95; border:none; border-radius:8px;
+      cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3); backdrop-filter:blur(4px);
+    }
+    .material-icons { font-size:24px; }
   </style>
 </head>
 <body>
+
+  <button id="homeButton" title="Clear & Home">
+    <span class="material-icons">home</span>
+  </button>
+
   <div id="map"></div>
+
   <script>
-    // 1) TOKEN + CONSTANTS
     mapboxgl.accessToken = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
-    const defaultCenter = [-71.245, 42.254];
-    const defaultZoom   = 8.8;
-    const layerId       = 'mbta-municipalities-by-compli-5gbi66';
-    const nameField     = 'Municipali';
 
-    let allFeatures = [];
+    const defaultCenter    = [-71.245,42.254],
+          defaultZoom      = 8,
+          vectorLayerId    = 'mbta-municipalities-by-compli-5gbi66',
+          tileField        = 'Municipali',
+          geojsonField     = 'Municipality',
+          bounds           = [[-72.5,41.5],[-69.5,43.0]],
+          geojsonURL       = './3A_Communities_by_Compliance_Status.geojson';
 
-    // 2) INIT MAP
+    let municipalitiesData = [];
+
     const map = new mapboxgl.Map({
-      container: 'map',
-      style: 'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',
-      center: defaultCenter,
-      zoom: defaultZoom
+      container:'map',
+      style:'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',
+      center:defaultCenter, zoom:defaultZoom,
+      minZoom:defaultZoom, maxZoom:22, maxBounds:bounds
     });
 
-    // 3) UTILS
-    function getBounds(feature) {
-      const coords = feature.geometry.type === 'MultiPolygon'
-        ? feature.geometry.coordinates.flat(2)
-        : feature.geometry.coordinates[0];
-      return coords.reduce(
-        (b, pt) => b.extend(pt),
-        new mapboxgl.LngLatBounds()
+    function getFeatureBounds(feature) {
+      const geom = feature.geometry;
+      const pts  = geom.type==='MultiPolygon'
+        ? geom.coordinates.flat(2)
+        : geom.coordinates[0];
+      return pts.reduce((b,c)=>b.extend(c), new mapboxgl.LngLatBounds());
+    }
+
+    function selectFeature(feature) {
+      const bb = getFeatureBounds(feature);
+      map.fitBounds(bb,{padding:40,duration:800});
+
+      map.setFilter('fade-layer',
+        ['!=',['get',geojsonField],feature.properties[geojsonField]]
       );
-    }
+      map.setLayoutProperty('fade-layer','visibility','visible');
 
-    function highlight(feature) {
-      // zoom
-      const bounds = getBounds(feature);
-      map.fitBounds(bounds, { padding: 40, speed: 1.2, essential: true });
-      // set highlight source
-      map.getSource('highlight').setData({
-        type: 'FeatureCollection',
-        features: [feature]
-      });
-    }
-
-    function reset() {
-      map.flyTo({ center: defaultCenter, zoom: defaultZoom, speed: 1.2, essential: true });
-      map.getSource('highlight').setData({ type:'FeatureCollection', features:[] });
-    }
-
-    // 4) ON LOAD
-    map.on('load', () => {
-      // cache vector‐tile features once
-      allFeatures = map.querySourceFeatures('composite', {
-        sourceLayer: layerId
+      map.getSource('highlight-town').setData({
+        type:'FeatureCollection', features:[feature]
       });
 
-      // add highlight source + layers
-      map.addSource('highlight', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
+      window.parent.postMessage({
+        type:'town-selected',
+        properties: feature.properties
+      }, '*');
+    }
+
+    function clearSelection() {
+      map.setLayoutProperty('fade-layer','visibility','none');
+      map.getSource('highlight-town').setData({ type:'FeatureCollection', features:[] });
+      map.flyTo({ center:defaultCenter, zoom:defaultZoom, speed:1.2, essential:true });
+      window.parent.postMessage({ type:'clear-town' }, '*');
+    }
+
+    map.on('load',()=>{
+      fetch(geojsonURL)
+        .then(r=>r.ok? r.json():Promise.reject(r.status))
+        .then(data=> municipalitiesData = data.features)
+        .catch(err=>console.error('GeoJSON load failed:',err));
+
+      map.addSource('municipalities-full',{type:'geojson',data:geojsonURL});
+      map.addLayer({
+        id:'fade-layer', type:'fill', source:'municipalities-full',
+        paint:{'fill-color':'#888','fill-opacity':0.5},
+        layout:{visibility:'none'}
+      });
+
+      map.addSource('highlight-town',{type:'geojson',data:{type:'FeatureCollection',features:[] }});
+      map.addLayer({
+        id:'highlight-fill', type:'fill', source:'highlight-town',
+        paint:{'fill-color':'#FFEB3B','fill-opacity':0.8}
       });
       map.addLayer({
-        id: 'highlight-fill',
-        type: 'fill',
-        source: 'highlight',
-        paint: { 'fill-color':'#FFEB3B','fill-opacity':0.8 }
-      });
-      map.addLayer({
-        id: 'highlight-line',
-        type: 'line',
-        source: 'highlight',
-        paint: { 'line-color':'#FF9800','line-width':2 }
+        id:'highlight-line', type:'line', source:'highlight-town',
+        paint:{'line-color':'#FF9800','line-width':2}
       });
 
-      // click on map layer
-      map.on('click', layerId, e => {
-        const clickedName = e.features[0].properties[nameField];
-        const feature = allFeatures.find(f => f.properties[nameField] === clickedName);
-        if (feature) highlight(feature);
-      });
+      document.getElementById('homeButton').onclick = clearSelection;
 
-      // listen for postMessage from search.html
-      window.addEventListener('message', e => {
-        const msg = e.data;
-        if (msg?.type === 'search-town') {
-          const term = msg.name.trim().toLowerCase();
-          const feature = allFeatures.find(
-            f => f.properties[nameField]?.toLowerCase() === term
-          );
-          if (feature) {
-            highlight(feature);
-          } else {
-            // optionally send back “not found”
-            console.warn(`Town "${msg.name}" not found.`);
-          }
-        }
-        else if (msg?.type === 'clear-town') {
-          reset();
-        }
+      map.on('click', vectorLayerId, e=>{
+        if(!municipalitiesData.length) return;
+        const name = e.features[0].properties[tileField];
+        const match = municipalitiesData.find(
+          f=>f.properties[geojsonField]?.toLowerCase()===name.toLowerCase()
+        );
+        if(match) selectFeature(match);
       });
+    });
+
+    window.addEventListener('message', e=>{
+      const msg=e.data;
+      if(!municipalitiesData.length) return;
+      if(msg?.type==='search-town'){
+        const term=msg.name.trim().toLowerCase();
+        const match = municipalitiesData.find(
+          f=>f.properties[geojsonField]?.toLowerCase()===term
+        );
+        if(match) selectFeature(match);
+      } else if(msg?.type==='clear-town'){
+        clearSelection();
+      }
     });
   </script>
 </body>
