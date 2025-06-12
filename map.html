@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>MBTA GeoJSON Click Test</title>
+  <title>MBTA Municipalities Map</title>
 
   <!-- Mapbox GL JS & CSS -->
   <link
@@ -16,36 +16,33 @@
     html, body { margin:0; padding:0; height:100%; }
     #map { position:absolute; top:0; left:0; right:0; bottom:0; }
     #homeButton {
-      position:absolute;
-      top:10px; left:10px;
-      z-index:2;
-      padding:8px 12px;
-      background:rgba(255,255,255,0.9);
-      border:none; border-radius:4px;
-      cursor:pointer;
+      position:absolute; top:10px; left:10px; z-index:2;
+      padding:8px 12px; background:rgba(255,255,255,0.9);
+      border:none; border-radius:4px; cursor:pointer;
     }
   </style>
 </head>
 <body>
 
   <div id="map"></div>
-  <button id="homeButton">Home</button>
+  <button id="homeButton" title="Clear & Home">Home</button>
 
   <script>
-    // --- 1) CONFIGURATION ---
+    // 1) Your Mapbox token
     mapboxgl.accessToken = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
 
-    const defaultCenter = [-71.245, 42.254];
-    const defaultZoom   = 8;
-    const bounds        = [[-72.5,41.5],[-69.5,43.0]];
-    const geojsonURL    = './mbtacompliance.geojson';
-
-    // ← after clicking once, set this to the exact key from the console output:
-    const geojsonField  = 'MBTA_Municipalities_data0k5Yh_1';
+    // 2) Configuration
+    const defaultCenter  = [-71.245, 42.254];
+    const defaultZoom    = 8;
+    const bounds         = [[-72.5,41.5],[-69.5,43.0]];
+    const vectorLayerId  = 'mbta-municipalities-by-compli-5gbi66';
+    const tileField      = 'MBTA_Mun_4';                // ← vector‐tile’s town name
+    const geojsonField   = 'MBTA_Municipalities_data0k5Yh_1'; // ← GeoJSON’s town name
+    const geojsonURL     = './mbtacompliance.geojson';
 
     let municipalitiesData = [];
 
-    // --- 2) INITIALIZE MAP ---
+    // 3) Initialize map
     const map = new mapboxgl.Map({
       container: 'map',
       style:     'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',
@@ -55,7 +52,7 @@
       maxBounds: bounds
     });
 
-    // --- 3) UTILITY: GET BOUNDS ---
+    // 4) Utility: compute bounds of a GeoJSON feature
     function getFeatureBounds(feature) {
       const coords = feature.geometry.type === 'MultiPolygon'
         ? feature.geometry.coordinates.flat(2)
@@ -66,12 +63,11 @@
       );
     }
 
-    // --- 4) SELECT & HIGHLIGHT LOGIC ---
-    function selectFeature(f) {
-      const name = f.properties[geojsonField];
-      console.log('🎯 Selected:', name);
+    // 5) Zoom & highlight a feature
+    function selectFeature(feature) {
+      const name = feature.properties[geojsonField];
       map.fitBounds(
-        getFeatureBounds(f),
+        getFeatureBounds(feature),
         { padding:40, duration:800 }
       );
       map.setFilter('fade-layer',
@@ -79,103 +75,82 @@
       );
       map.setLayoutProperty('fade-layer','visibility','visible');
       map.getSource('highlight-town').setData({
-        type:'FeatureCollection',
-        features:[f]
+        type: 'FeatureCollection',
+        features: [ feature ]
       });
       window.parent.postMessage(
-        { type:'town-selected', properties:f.properties },
+        { type:'town-selected', properties: feature.properties },
         '*'
       );
     }
 
+    // 6) Clear highlight & reset view
     function clearSelection() {
-      console.log('🧹 Cleared selection');
       map.setLayoutProperty('fade-layer','visibility','none');
       map.getSource('highlight-town').setData({
         type:'FeatureCollection',
-        features:[ ]
+        features: []
       });
       map.flyTo({ center:defaultCenter, zoom:defaultZoom });
       window.parent.postMessage({ type:'clear-town' }, '*');
     }
 
-    // --- 5) ON MAP LOAD: LOAD GEOJSON + ADD LAYERS ---
+    // 7) On map load: fetch GeoJSON & add layers
     map.on('load', () => {
-      // 5a) Fetch and stash features
+      // 7a) Load your GeoJSON into memory
       fetch(geojsonURL)
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(js => {
           municipalitiesData = js.features;
-          window.municipalitiesData = municipalitiesData; // for console
-          console.log('✅ Loaded features:', municipalitiesData.length);
-          console.log('🔑 Property keys:', Object.keys(municipalitiesData[0].properties));
         })
-        .catch(e => console.error('❌ GeoJSON load error:', e));
+        .catch(err => console.error('GeoJSON load failed:', err));
 
-      // 5b) Fade layer
+      // 7b) Fade layer (to dim all except selected)
       map.addSource('municipalities-full', {
-        type:'geojson', data:geojsonURL
+        type: 'geojson',
+        data: geojsonURL
       });
       map.addLayer({
-        id:'fade-layer',
-        type:'fill',
-        source:'municipalities-full',
-        paint:{ 'fill-color':'#888','fill-opacity':0.5 },
-        layout:{ visibility:'none' }
+        id: 'fade-layer',
+        type: 'fill',
+        source: 'municipalities-full',
+        paint: { 'fill-color': '#888', 'fill-opacity': 0.5 },
+        layout: { visibility: 'none' }
       });
 
-      // 5c) Highlight layer
+      // 7c) Highlight layers
       map.addSource('highlight-town', {
-        type:'geojson',
-        data:{ type:'FeatureCollection', features:[] }
+        type: 'geojson',
+        data: { type:'FeatureCollection', features:[] }
       });
       map.addLayer({
-        id:'highlight-fill',
-        type:'fill',
-        source:'highlight-town',
-        paint:{ 'fill-color':'#FFEB3B','fill-opacity':0.8 }
+        id: 'highlight-fill',
+        type: 'fill',
+        source: 'highlight-town',
+        paint: { 'fill-color': '#FFEB3B', 'fill-opacity': 0.8 }
       });
       map.addLayer({
-        id:'highlight-line',
-        type:'line',
-        source:'highlight-town',
-        paint:{ 'line-color':'#FF9800','line-width':2 }
+        id: 'highlight-line',
+        type: 'line',
+        source: 'highlight-town',
+        paint: { 'line-color': '#FF9800', 'line-width': 2 }
       });
 
-      // 5d) Invisible click-layer on your GeoJSON
-      map.addLayer({
-        id:'click-layer',
-        type:'fill',
-        source:'municipalities-full',
-        paint:{ 'fill-opacity': 0 }
-      });
-
-      // 5e) Home button
-      document.getElementById('homeButton')
-        .addEventListener('click', clearSelection);
-
-      // 5f) Click handler on the click-layer
-      map.on('click', 'click-layer', e => {
-        const feat = e.features[0];
-
-        // 👉 Dump full properties so you can see the exact field:
-        console.log('🧩 GeoJSON props:', feat.properties);
-
-        const name = feat.properties[geojsonField]?.toLowerCase().trim();
-        if (!name) {
-          console.warn('❌ No valid name in properties.');
-          return;
-        }
-
+      // 7d) Transparent click layer on top of your vector tiles
+      map.on('click', vectorLayerId, e => {
+        const clickedName = e.features[0].properties[tileField]?.toLowerCase().trim();
+        if (!clickedName) return;
         const match = municipalitiesData.find(f =>
-          f.properties[geojsonField]?.toLowerCase().trim() === name
+          f.properties[geojsonField]?.toLowerCase().trim() === clickedName
         );
         if (match) selectFeature(match);
-        else console.warn('❌ No match for:', name);
       });
+
+      // 7e) Home button resets
+      document.getElementById('homeButton').onclick = clearSelection;
     });
 
-    // --- 6) PARENT-FRAME SEARCH/CLEAR MESSAGES ---
+    // 8) Listen for parent-frame search/clear messages
     window.addEventListener('message', e => {
       if (!municipalitiesData.length) return;
       if (e.data.type === 'search-town') {
@@ -184,7 +159,6 @@
           f.properties[geojsonField]?.toLowerCase().trim() === term
         );
         if (match) selectFeature(match);
-        else console.warn('❌ Search not found:', term);
       }
       else if (e.data.type === 'clear-town') {
         clearSelection();
