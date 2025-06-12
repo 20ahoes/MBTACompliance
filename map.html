@@ -5,7 +5,7 @@
   <title>Compliance Map</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
-  <!-- Roboto & Material Icons -->
+  <!-- Roboto & Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
 
@@ -14,13 +14,8 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet"/>
 
   <style>
-    body, html {
-      margin:0; padding:0; height:100%;
-      font-family:'Roboto',sans-serif;
-    }
-    #map {
-      position:absolute; top:0; bottom:0; width:100%;
-    }
+    body, html { margin:0; padding:0; height:100%; font-family:'Roboto',sans-serif; }
+    #map { position:absolute; top:0; bottom:0; width:100%; }
     #homeButton {
       position:absolute; top:10px; left:10px; z-index:2;
       padding:10px 20px; font-size:16px; font-weight:700;
@@ -43,7 +38,7 @@
   <script>
     mapboxgl.accessToken = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
 
-    const defaultCenter = [-71.245,42.254],
+    const defaultCenter = [-71.245, 42.254],
           defaultZoom   = 8,
           geojsonURL    = './3A_Communities_by_Compliance_Status.geojson',
           geojsonField  = 'Municipality';
@@ -71,16 +66,11 @@
     }
 
     function selectFeature(feature) {
+      // zoom to center of polygon
       const bb = getFeatureBounds(feature);
       map.fitBounds(bb, { padding: 40, duration: 800 });
 
-      // de-emphasize others
-      map.setFilter('fade-layer',
-        ['!=', ['get', geojsonField], feature.properties[geojsonField]]
-      );
-      map.setLayoutProperty('fade-layer', 'visibility', 'visible');
-
-      // highlight selected
+      // show highlight
       map.getSource('highlight-town').setData({
         type: 'FeatureCollection',
         features: [feature]
@@ -93,36 +83,32 @@
     }
 
     function clearSelection() {
-      // show all
-      map.setFilter('fade-layer', null);
+      // reset view & remove highlight
       map.flyTo({ center: defaultCenter, zoom: defaultZoom, speed: 1.2, essential: true });
       map.getSource('highlight-town').setData({ type:'FeatureCollection', features:[] });
       window.parent.postMessage({ type:'clear-town' }, '*');
     }
 
     map.on('load', () => {
-      // load GeoJSON
+      // load GeoJSON features
       fetch(geojsonURL)
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(data => municipalitiesData = data.features)
         .catch(err => console.error('GeoJSON load failed:', err));
 
-      // ---------- Compliance fill (now solid) ----------
+      // add compliance layer (always visible)
       map.addSource('municipalities-full', { type:'geojson', data:geojsonURL });
       map.addLayer({
-        id: 'fade-layer',
+        id: 'compliance-layer',
         type: 'fill',
         source: 'municipalities-full',
         paint: {
-          'fill-color': '#888',
-          'fill-opacity': 1         // ← solid fill, no transparency
-        },
-        layout: {
-          visibility: 'visible'
+          'fill-color': '#888',    // solid gray
+          'fill-opacity': 1
         }
       });
 
-      // ---------- Highlight layers ----------
+      // add highlight layers
       map.addSource('highlight-town', {
         type:'geojson',
         data:{ type:'FeatureCollection', features:[] }
@@ -140,13 +126,13 @@
         paint:{ 'line-color':'#FF9800','line-width':2 }
       });
 
-      // Home/Reset
+      // home/reset
       document.getElementById('homeButton').onclick = clearSelection;
 
-      // Click on the fill layer
-      map.on('click', 'fade-layer', e => {
+      // click on compliance layer
+      map.on('click', 'compliance-layer', e => {
         if (!municipalitiesData.length) return;
-        const props   = e.features[0].properties;
+        const props = e.features[0].properties;
         const feature = municipalitiesData.find(
           f => f.properties[geojsonField] === props[geojsonField]
         );
@@ -154,7 +140,7 @@
       });
     });
 
-    // Parent messaging
+    // parent messaging
     window.addEventListener('message', e => {
       const msg = e.data;
       if (!municipalitiesData.length) return;
@@ -164,8 +150,7 @@
           f => f.properties[geojsonField]?.toLowerCase() === term
         );
         if (feature) selectFeature(feature);
-      }
-      else if (msg?.type === 'clear-town') {
+      } else if (msg?.type === 'clear-town') {
         clearSelection();
       }
     });
