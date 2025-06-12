@@ -14,19 +14,13 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet"/>
 
   <style>
-    body, html {
-      margin:0; padding:0; height:100%;
-      font-family:'Roboto',sans-serif;
-    }
-    #map {
-      position:absolute; top:0; bottom:0; width:100%;
-    }
+    body, html { margin:0; padding:0; height:100%; font-family:'Roboto',sans-serif; }
+    #map { position:absolute; top:0; bottom:0; width:100%; }
     #homeButton {
       position:absolute; top:10px; left:10px; z-index:2;
       padding:10px 20px; font-size:16px; font-weight:700;
-      background:rgba(255,255,255,0.9); color:#005e95;
-      border:none; border-radius:8px; cursor:pointer;
-      box-shadow:0 2px 6px rgba(0,0,0,0.3);
+      background:rgba(255,255,255,0.9); color:#005e95; border:none;
+      border-radius:8px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3);
       backdrop-filter:blur(4px);
     }
     .material-icons { font-size:24px; }
@@ -37,15 +31,16 @@
   <button id="homeButton" title="Clear & Home">
     <span class="material-icons">home</span>
   </button>
-
   <div id="map"></div>
 
   <script>
-    mapboxgl.accessToken = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
+    // Your token
+    const token = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
+    mapboxgl.accessToken = token;
 
+    // Map parameters
     const defaultCenter    = [-71.245, 42.254],
           defaultZoom      = 8,
-          vectorLayerId    = 'mbta-municipalities-by-compli-5gbi66',
           tileField        = 'Municipali',
           geojsonField     = 'Municipality',
           bounds           = [[-72.5,41.5],[-69.5,43.0]],
@@ -53,9 +48,13 @@
 
     let municipalitiesData = [];
 
+    // Force‐fresh HTTP style URL (cache-bust via timestamp)
+    const styleURL = `https://api.mapbox.com/styles/v1/20ahoes/cmbtl7zn9002x01s9a2nk0izb?access_token=${token}&fresh=${Date.now()}`;
+
+    // Initialize map with HTTP style URL
     const map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',
+      style: styleURL,
       center: defaultCenter,
       zoom: defaultZoom,
       minZoom: defaultZoom,
@@ -63,37 +62,36 @@
       maxBounds: bounds
     });
 
+    // Utility to get bounds of a feature
     function getFeatureBounds(feature) {
-      const geom = feature.geometry;
-      const pts = geom.type === 'MultiPolygon'
+      const coords = feature.geometry.type === 'MultiPolygon'
         ? feature.geometry.coordinates.flat(2)
         : feature.geometry.coordinates[0];
-      return pts.reduce(
+      return coords.reduce(
         (b, c) => b.extend(c),
         new mapboxgl.LngLatBounds()
       );
     }
 
+    // Zoom & highlight a feature
     function selectFeature(feature) {
       const bb = getFeatureBounds(feature);
       map.fitBounds(bb, { padding: 40, duration: 800 });
-
       map.setFilter('fade-layer',
         ['!=', ['get', geojsonField], feature.properties[geojsonField]]
       );
       map.setLayoutProperty('fade-layer', 'visibility', 'visible');
-
       map.getSource('highlight-town').setData({
         type: 'FeatureCollection',
         features: [feature]
       });
-
       window.parent.postMessage({
         type: 'town-selected',
         properties: feature.properties
       }, '*');
     }
 
+    // Clear highlight & reset view
     function clearSelection() {
       map.setLayoutProperty('fade-layer', 'visibility', 'none');
       map.getSource('highlight-town').setData({ type: 'FeatureCollection', features: [] });
@@ -101,50 +99,53 @@
       window.parent.postMessage({ type: 'clear-town' }, '*');
     }
 
-    map.on('load', () => {
-      // 1) Hide any existing fill layer in this style
-      if (map.getLayer(vectorLayerId)) {
-        map.setLayoutProperty(vectorLayerId, 'visibility', 'none');
-      }
-
-      // 2) Load your new compliance GeoJSON
+    // Only after style is fully loaded...
+    map.on('style.load', () => {
+      // 1) Fetch your new GeoJSON data
       fetch(geojsonURL)
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(data => municipalitiesData = data.features)
         .catch(err => console.error('GeoJSON load failed:', err));
 
-      // 3) Add fade‐out layer
+      // 2) Add fade‐out layer source & layer
       map.addSource('municipalities-full', { type: 'geojson', data: geojsonURL });
       map.addLayer({
         id: 'fade-layer',
         type: 'fill',
         source: 'municipalities-full',
-        paint: { 'fill-color': '#888', 'fill-opacity': 0.5 },
+        paint: { 'fill-color':'#888','fill-opacity':0.5 },
         layout: { visibility: 'none' }
       });
 
-      // 4) Add highlight layers
-      map.addSource('highlight-town', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      // 3) Add highlight‐town source & layers
+      map.addSource('highlight-town', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
       map.addLayer({
-        id: 'highlight-fill',
-        type: 'fill',
-        source: 'highlight-town',
-        paint: { 'fill-color': '#FFEB3B', 'fill-opacity': 0.8 }
+        id:'highlight-fill', type:'fill', source:'highlight-town',
+        paint:{ 'fill-color':'#FFEB3B','fill-opacity':0.8 }
       });
       map.addLayer({
-        id: 'highlight-line',
-        type: 'line',
-        source: 'highlight-town',
-        paint: { 'line-color': '#FF9800', 'line-width': 2 }
+        id:'highlight-line', type:'line', source:'highlight-town',
+        paint:{ 'line-color':'#FF9800','line-width':2 }
       });
 
-      // 5) Home/Clear button handler
+      // 4) Home/Clear button
       document.getElementById('homeButton').onclick = clearSelection;
 
-      // 6) Click on vector‐tile (if still present in style)
-      map.on('click', vectorLayerId, e => {
-        if (!municipalitiesData.length) return;
-        const clicked = e.features[0].properties[tileField];
+      // 5) Click handler on the vector‐tile layer
+      map.on('click', feature => {
+        // Determine which vector layer to click on by inspecting all layers
+        const layers = map.getStyle().layers.map(l => l.id);
+        // Find your municipalities vector‐tile layer by matching its source-layer
+        // (helpful if the style-layer ID changed)
+        const vectorLayerId = layers.find(id =>
+          map.getLayer(id)?.source === 'composite' &&
+          map.getLayer(id)?.['source-layer']?.toLowerCase().includes('compli')
+        );
+        if (!vectorLayerId) return;
+
+        const features = map.queryRenderedFeatures(feature.point, { layers: [vectorLayerId] });
+        if (!features.length) return;
+        const clicked = features[0].properties[tileField];
         const match = municipalitiesData.find(
           f => f.properties[geojsonField]?.toLowerCase() === clicked.toLowerCase()
         );
@@ -152,7 +153,7 @@
       });
     });
 
-    // Search/Clear messaging from parent
+    // Message listener for search & clear
     window.addEventListener('message', e => {
       const msg = e.data;
       if (!municipalitiesData.length) return;
