@@ -31,30 +31,26 @@
   <button id="homeButton" title="Clear & Home">
     <span class="material-icons">home</span>
   </button>
+
   <div id="map"></div>
 
   <script>
-    // Your token
-    const token = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
-    mapboxgl.accessToken = token;
+    // 1) Access token
+    mapboxgl.accessToken = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
 
-    // Map parameters
-    const defaultCenter    = [-71.245, 42.254],
-          defaultZoom      = 8,
-          tileField        = 'Municipali',
-          geojsonField     = 'Municipality',
-          bounds           = [[-72.5,41.5],[-69.5,43.0]],
-          geojsonURL       = './3A_Communities_by_Compliance_Status.geojson';
+    // 2) Params
+    const defaultCenter = [-71.245, 42.254];
+    const defaultZoom   = 8;
+    const vectorLayerId = 'mbta-municipalities-by-compli-5gbi66'; // your old style layer
+    const tileField     = 'Municipali';
+    const geojsonField  = 'Municipality';
+    const bounds        = [[-72.5,41.5],[-69.5,43.0]];
+    const geojsonURL    = './3A_Communities_by_Compliance_Status.geojson';
 
-    let municipalitiesData = [];
-
-    // Force‐fresh HTTP style URL (cache-bust via timestamp)
-    const styleURL = `https://api.mapbox.com/styles/v1/20ahoes/cmbtl7zn9002x01s9a2nk0izb?access_token=${token}&fresh=${Date.now()}`;
-
-    // Initialize map with HTTP style URL
+    // 3) Create map
     const map = new mapboxgl.Map({
       container: 'map',
-      style: styleURL,
+      style: 'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',
       center: defaultCenter,
       zoom: defaultZoom,
       minZoom: defaultZoom,
@@ -62,7 +58,9 @@
       maxBounds: bounds
     });
 
-    // Utility to get bounds of a feature
+    let municipalitiesData = [];
+
+    // 4) Helper: get bounding box of a feature
     function getFeatureBounds(feature) {
       const coords = feature.geometry.type === 'MultiPolygon'
         ? feature.geometry.coordinates.flat(2)
@@ -73,7 +71,7 @@
       );
     }
 
-    // Zoom & highlight a feature
+    // 5) Highlight + zoom
     function selectFeature(feature) {
       const bb = getFeatureBounds(feature);
       map.fitBounds(bb, { padding: 40, duration: 800 });
@@ -91,7 +89,7 @@
       }, '*');
     }
 
-    // Clear highlight & reset view
+    // 6) Clear highlight + reset
     function clearSelection() {
       map.setLayoutProperty('fade-layer', 'visibility', 'none');
       map.getSource('highlight-town').setData({ type: 'FeatureCollection', features: [] });
@@ -99,53 +97,51 @@
       window.parent.postMessage({ type: 'clear-town' }, '*');
     }
 
-    // Only after style is fully loaded...
-    map.on('style.load', () => {
-      // 1) Fetch your new GeoJSON data
+    // 7) When base style and sources are loaded
+    map.on('load', () => {
+      // a) Hide the old vector‐tile layer
+      if (map.getLayer(vectorLayerId)) {
+        map.setLayoutProperty(vectorLayerId, 'visibility', 'none');
+      }
+
+      // b) Fetch your new GeoJSON data
       fetch(geojsonURL)
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(data => municipalitiesData = data.features)
         .catch(err => console.error('GeoJSON load failed:', err));
 
-      // 2) Add fade‐out layer source & layer
+      // c) Add “fade-layer” for de-emphasis
       map.addSource('municipalities-full', { type: 'geojson', data: geojsonURL });
       map.addLayer({
         id: 'fade-layer',
         type: 'fill',
         source: 'municipalities-full',
-        paint: { 'fill-color':'#888','fill-opacity':0.5 },
+        paint: { 'fill-color': '#888', 'fill-opacity': 0.5 },
         layout: { visibility: 'none' }
       });
 
-      // 3) Add highlight‐town source & layers
-      map.addSource('highlight-town', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+      // d) Add highlight layers
+      map.addSource('highlight-town', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       map.addLayer({
-        id:'highlight-fill', type:'fill', source:'highlight-town',
-        paint:{ 'fill-color':'#FFEB3B','fill-opacity':0.8 }
+        id: 'highlight-fill',
+        type: 'fill',
+        source: 'highlight-town',
+        paint: { 'fill-color': '#FFEB3B', 'fill-opacity': 0.8 }
       });
       map.addLayer({
-        id:'highlight-line', type:'line', source:'highlight-town',
-        paint:{ 'line-color':'#FF9800','line-width':2 }
+        id: 'highlight-line',
+        type: 'line',
+        source: 'highlight-town',
+        paint: { 'line-color': '#FF9800', 'line-width': 2 }
       });
 
-      // 4) Home/Clear button
+      // e) Home/Clear
       document.getElementById('homeButton').onclick = clearSelection;
 
-      // 5) Click handler on the vector‐tile layer
-      map.on('click', feature => {
-        // Determine which vector layer to click on by inspecting all layers
-        const layers = map.getStyle().layers.map(l => l.id);
-        // Find your municipalities vector‐tile layer by matching its source-layer
-        // (helpful if the style-layer ID changed)
-        const vectorLayerId = layers.find(id =>
-          map.getLayer(id)?.source === 'composite' &&
-          map.getLayer(id)?.['source-layer']?.toLowerCase().includes('compli')
-        );
-        if (!vectorLayerId) return;
-
-        const features = map.queryRenderedFeatures(feature.point, { layers: [vectorLayerId] });
-        if (!features.length) return;
-        const clicked = features[0].properties[tileField];
+      // f) Click handler on your OLD vector layer name
+      map.on('click', vectorLayerId, e => {
+        if (!municipalitiesData.length) return;
+        const clicked = e.features[0].properties[tileField];
         const match = municipalitiesData.find(
           f => f.properties[geojsonField]?.toLowerCase() === clicked.toLowerCase()
         );
@@ -153,16 +149,18 @@
       });
     });
 
-    // Message listener for search & clear
+    // 8) Listen for search/clear from parent
     window.addEventListener('message', e => {
       const msg = e.data;
       if (!municipalitiesData.length) return;
+
       if (msg?.type === 'search-town') {
         const term = msg.name.trim().toLowerCase();
         const match = municipalitiesData.find(
           f => f.properties[geojsonField]?.toLowerCase() === term
         );
         if (match) selectFeature(match);
+
       } else if (msg?.type === 'clear-town') {
         clearSelection();
       }
