@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Compliance Map</title>
@@ -12,67 +12,24 @@
     rel="stylesheet"
   />
 
-  <!-- Roboto & Icons -->
-  <link
-    href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap"
-    rel="stylesheet"
-  />
-  <link
-    href="https://fonts.googleapis.com/icon?family=Material+Icons"
-    rel="stylesheet"
-  />
-
   <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: 'Roboto', sans-serif;
-    }
-    #map {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      width: 100%;
-    }
-    #homeButton {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 2;
-      padding: 10px;
-      background-color: rgba(255, 255, 255, 0.9);
-      color: #005e95;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(4px);
-    }
-    #homeButton:hover {
-      background-color: rgba(255, 255, 255, 1);
-    }
-    .material-icons {
-      font-size: 24px;
-    }
+    body, html { margin:0; padding:0; height:100%; }
+    #map { position:absolute; top:0; bottom:0; width:100%; }
   </style>
 </head>
 <body>
-  <button id="homeButton" title="Return to Default View">
-    <span class="material-icons">home</span>
-  </button>
   <div id="map"></div>
-
   <script>
+    // 1) TOKEN + CONSTANTS
     mapboxgl.accessToken = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
-
     const defaultCenter = [-71.245, 42.254];
     const defaultZoom   = 8.8;
     const layerId       = 'mbta-municipalities-by-compli-5gbi66';
     const nameField     = 'Municipali';
 
-    let municipalitiesData = [];
+    let allFeatures = [];
 
+    // 2) INIT MAP
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',
@@ -80,92 +37,82 @@
       zoom: defaultZoom
     });
 
-    function getFeatureBounds(feature) {
+    // 3) UTILS
+    function getBounds(feature) {
       const coords = feature.geometry.type === 'MultiPolygon'
         ? feature.geometry.coordinates.flat(2)
         : feature.geometry.coordinates[0];
       return coords.reduce(
-        (b, c) => b.extend(c),
+        (b, pt) => b.extend(pt),
         new mapboxgl.LngLatBounds()
       );
     }
 
-    function highlightAndZoom(feature) {
-      const bounds = getFeatureBounds(feature);
+    function highlight(feature) {
+      // zoom
+      const bounds = getBounds(feature);
       map.fitBounds(bounds, { padding: 40, speed: 1.2, essential: true });
-      // set highlight-source data
-      map.getSource('highlight-town').setData({
+      // set highlight source
+      map.getSource('highlight').setData({
         type: 'FeatureCollection',
         features: [feature]
       });
-      // notify parent
-      window.parent.postMessage({
-        type: 'town-selected',
-        properties: feature.properties
-      }, '*');
     }
 
-    function clearSelection() {
-      // reset view
+    function reset() {
       map.flyTo({ center: defaultCenter, zoom: defaultZoom, speed: 1.2, essential: true });
-      // clear highlight
-      map.getSource('highlight-town').setData({ type: 'FeatureCollection', features: [] });
-      window.parent.postMessage({ type: 'clear-town' }, '*');
+      map.getSource('highlight').setData({ type:'FeatureCollection', features:[] });
     }
 
+    // 4) ON LOAD
     map.on('load', () => {
-      // grab all features from the vector‐tile layer once
-      map.querySourceFeatures('composite', {
+      // cache vector‐tile features once
+      allFeatures = map.querySourceFeatures('composite', {
         sourceLayer: layerId
-      }).forEach(f => municipalitiesData.push(f));
+      });
 
-      // add highlight source & layers
-      map.addSource('highlight-town', {
+      // add highlight source + layers
+      map.addSource('highlight', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] }
       });
       map.addLayer({
         id: 'highlight-fill',
         type: 'fill',
-        source: 'highlight-town',
-        paint: {
-          'fill-color': '#FFEB3B',
-          'fill-opacity': 0.8
-        }
+        source: 'highlight',
+        paint: { 'fill-color':'#FFEB3B','fill-opacity':0.8 }
       });
       map.addLayer({
         id: 'highlight-line',
         type: 'line',
-        source: 'highlight-town',
-        paint: {
-          'line-color': '#FF9800',
-          'line-width': 2
-        }
+        source: 'highlight',
+        paint: { 'line-color':'#FF9800','line-width':2 }
       });
 
-      // Home button
-      document.getElementById('homeButton').addEventListener('click', clearSelection);
-
-      // Click on the vector layer
+      // click on map layer
       map.on('click', layerId, e => {
-        const clicked = e.features[0].properties[nameField];
-        const match = municipalitiesData.find(
-          f => f.properties[nameField] === clicked
-        );
-        if (match) highlightAndZoom(match);
+        const clickedName = e.features[0].properties[nameField];
+        const feature = allFeatures.find(f => f.properties[nameField] === clickedName);
+        if (feature) highlight(feature);
       });
 
-      // Search/Clear postMessage
+      // listen for postMessage from search.html
       window.addEventListener('message', e => {
         const msg = e.data;
         if (msg?.type === 'search-town') {
           const term = msg.name.trim().toLowerCase();
-          const match = municipalitiesData.find(
+          const feature = allFeatures.find(
             f => f.properties[nameField]?.toLowerCase() === term
           );
-          if (match) highlightAndZoom(match);
-        } else if (msg?.type === 'clear-town') {
-          clearSelection();
+          if (feature) {
+            highlight(feature);
+          } else {
+            // optionally send back “not found”
+            console.warn(`Town "${msg.name}" not found.`);
+          }
+        }
+        else if (msg?.type === 'clear-town') {
+          reset();
         }
       });
     });
