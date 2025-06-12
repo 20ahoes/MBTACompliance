@@ -1,158 +1,157 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
   <title>Compliance Map</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Roboto & Icons -->
+  <!-- Mapbox GL JS & CSS -->
+  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet" />
+
+  <!-- Roboto & Material Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
 
-  <!-- Mapbox GL JS -->
-  <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet"/>
-
   <style>
-    body, html { margin:0; padding:0; height:100%; font-family:'Roboto',sans-serif; }
-    #map { position:absolute; top:0; bottom:0; width:100%; }
-    #homeButton {
-      position:absolute; top:10px; left:10px; z-index:2;
-      padding:10px 20px; font-size:16px; font-weight:700;
-      background:rgba(255,255,255,0.9); color:#005e95; border:none;
-      border-radius:8px; cursor:pointer;
-      box-shadow:0 2px 6px rgba(0,0,0,0.3);
-      backdrop-filter:blur(4px);
+    body, html {
+      margin: 0; padding: 0; height: 100%; font-family: 'Roboto', sans-serif;
     }
-    .material-icons { font-size:24px; }
+    #map {
+      position: absolute; top: 0; bottom: 0; width: 100%;
+    }
+
+    /* Top‐center toggle button */
+    .top-bar {
+      position: absolute; top: 0; left: 0; width: 100%; height: 60px;
+      display: flex; justify-content: center; align-items: center;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.5), rgba(0,0,0,0));
+      z-index: 1; pointer-events: none;
+    }
+    #toggleMapboxLayer {
+      pointer-events: auto;
+      padding: 10px 20px; font-size: 16px; font-weight: 700;
+      background-color: rgba(255,255,255,0.9); color: #005e95;
+      border: none; border-radius: 8px; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3); backdrop-filter: blur(4px);
+    }
+    #toggleMapboxLayer:hover {
+      background-color: rgba(255,255,255,1);
+    }
+
+    /* Top‐left home button */
+    #homeButton {
+      position: absolute; top: 10px; left: 10px; z-index: 2;
+      padding: 10px; background-color: rgba(255,255,255,0.9);
+      color: #005e95; border: none; border-radius: 8px; cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3); backdrop-filter: blur(4px);
+    }
+    #homeButton:hover {
+      background-color: rgba(255,255,255,1);
+    }
+    .material-icons {
+      font-size: 24px;
+    }
   </style>
 </head>
 <body>
-
-  <button id="homeButton" title="Reset View">
+  <!-- Home Button -->
+  <button id="homeButton" title="Return to Default View">
     <span class="material-icons">home</span>
   </button>
 
+  <!-- Toggle Button -->
+  <div class="top-bar">
+    <button id="toggleMapboxLayer">Toggle Compliance Layer</button>
+  </div>
+
+  <!-- Map Container -->
   <div id="map"></div>
 
   <script>
+    // 1. Access token & constants
     mapboxgl.accessToken = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
 
-    const defaultCenter = [-71.245, 42.254],
-          defaultZoom   = 8,
-          geojsonURL    = './3A_Communities_by_Compliance_Status.geojson',
-          geojsonField  = 'Municipality';
+    const defaultCenter = [-71.245, 42.254];
+    const defaultZoom   = 8.8;
+    const layerId       = 'mbta-municipalities-by-compli-5gbi66';
+    const nameField     = 'Municipali';
 
-    let municipalitiesData = [];
-
+    // 2. Initialize map
     const map = new mapboxgl.Map({
       container: 'map',
-      style: 'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',
+      style: 'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',  // your new style
       center: defaultCenter,
-      zoom: defaultZoom,
-      minZoom: defaultZoom,
-      maxZoom: 22,
-      maxBounds: [[-72.5,41.5],[-69.5,43.0]]
+      zoom: defaultZoom
     });
 
-    function getFeatureBounds(feature) {
+    // 3. Highlight + zoom helper
+    function highlightAndZoom(feature) {
+      // build bounding box
       const coords = feature.geometry.type === 'MultiPolygon'
         ? feature.geometry.coordinates.flat(2)
         : feature.geometry.coordinates[0];
-      return coords.reduce(
+      const bounds = coords.reduce(
         (b, c) => b.extend(c),
         new mapboxgl.LngLatBounds()
       );
-    }
+      map.fitBounds(bounds, { padding: 40, speed: 1.2, essential: true });
 
-    function selectFeature(feature) {
-      // zoom to center of polygon
-      const bb = getFeatureBounds(feature);
-      map.fitBounds(bb, { padding: 40, duration: 800 });
-
-      // show highlight
-      map.getSource('highlight-town').setData({
-        type: 'FeatureCollection',
-        features: [feature]
-      });
-
-      window.parent.postMessage({
-        type: 'town-selected',
-        properties: feature.properties
-      }, '*');
-    }
-
-    function clearSelection() {
-      // reset view & remove highlight
-      map.flyTo({ center: defaultCenter, zoom: defaultZoom, speed: 1.2, essential: true });
-      map.getSource('highlight-town').setData({ type:'FeatureCollection', features:[] });
-      window.parent.postMessage({ type:'clear-town' }, '*');
+      // set paint on fill layer: red for match, gray for others
+      map.setPaintProperty(layerId, 'fill-color', [
+        'case',
+        ['==', ['get', nameField], feature.properties[nameField]],
+        '#f00',
+        '#ccc'
+      ]);
     }
 
     map.on('load', () => {
-      // load GeoJSON features
-      fetch(geojsonURL)
-        .then(r => r.ok ? r.json() : Promise.reject(r.status))
-        .then(data => municipalitiesData = data.features)
-        .catch(err => console.error('GeoJSON load failed:', err));
+      // 4. On load, set default fill‐color to light gray
+      if (map.getLayer(layerId)) {
+        map.setPaintProperty(layerId, 'fill-color', '#ccc');
+      } else {
+        console.error(`Layer "${layerId}" not found.`);
+      }
 
-      // add compliance layer (always visible)
-      map.addSource('municipalities-full', { type:'geojson', data:geojsonURL });
-      map.addLayer({
-        id: 'compliance-layer',
-        type: 'fill',
-        source: 'municipalities-full',
-        paint: {
-          'fill-color': '#888',    // solid gray
-          'fill-opacity': 1
+      // 5. Home button resets view & clears highlight
+      document.getElementById('homeButton').addEventListener('click', () => {
+        map.flyTo({ center: defaultCenter, zoom: defaultZoom, speed: 1.2, essential: true });
+        // restore all to gray
+        map.setPaintProperty(layerId, 'fill-color', '#ccc');
+      });
+
+      // 6. Toggle visibility
+      document.getElementById('toggleMapboxLayer').addEventListener('click', () => {
+        const vis = map.getLayoutProperty(layerId, 'visibility') || 'visible';
+        const newVis = vis === 'visible' ? 'none' : 'visible';
+        map.setLayoutProperty(layerId, 'visibility', newVis);
+      });
+
+      // 7. Listen for parent “search-town” and “clear-town” messages
+      window.addEventListener('message', event => {
+        const msg = event.data;
+        if (msg?.type === 'search-town') {
+          const term = msg.name.trim().toLowerCase();
+          // search rendered features on this layer
+          const features = map.queryRenderedFeatures({ layers: [layerId] });
+          const match = features.find(f =>
+            f.properties[nameField].toLowerCase() === term
+          );
+          if (match) highlightAndZoom(match);
+        } else if (msg?.type === 'clear-town') {
+          // same as Home button
+          map.flyTo({ center: defaultCenter, zoom: defaultZoom, speed: 1.2, essential: true });
+          map.setPaintProperty(layerId, 'fill-color', '#ccc');
         }
       });
 
-      // add highlight layers
-      map.addSource('highlight-town', {
-        type:'geojson',
-        data:{ type:'FeatureCollection', features:[] }
+      // 8. Click‐to‐select on the vector layer
+      map.on('click', layerId, e => {
+        if (e.features.length) {
+          highlightAndZoom(e.features[0]);
+        }
       });
-      map.addLayer({
-        id:'highlight-fill',
-        type:'fill',
-        source:'highlight-town',
-        paint:{ 'fill-color':'#FFEB3B','fill-opacity':0.8 }
-      });
-      map.addLayer({
-        id:'highlight-line',
-        type:'line',
-        source:'highlight-town',
-        paint:{ 'line-color':'#FF9800','line-width':2 }
-      });
-
-      // home/reset
-      document.getElementById('homeButton').onclick = clearSelection;
-
-      // click on compliance layer
-      map.on('click', 'compliance-layer', e => {
-        if (!municipalitiesData.length) return;
-        const props = e.features[0].properties;
-        const feature = municipalitiesData.find(
-          f => f.properties[geojsonField] === props[geojsonField]
-        );
-        if (feature) selectFeature(feature);
-      });
-    });
-
-    // parent messaging
-    window.addEventListener('message', e => {
-      const msg = e.data;
-      if (!municipalitiesData.length) return;
-      if (msg?.type === 'search-town') {
-        const term = msg.name.trim().toLowerCase();
-        const feature = municipalitiesData.find(
-          f => f.properties[geojsonField]?.toLowerCase() === term
-        );
-        if (feature) selectFeature(feature);
-      } else if (msg?.type === 'clear-town') {
-        clearSelection();
-      }
     });
   </script>
 </body>
