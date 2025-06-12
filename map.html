@@ -2,8 +2,8 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>MBTA Compliance Map</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MBTA Compliance Map (Debug TileField)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Mapbox GL JS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
@@ -25,20 +25,22 @@
   <div id="map"></div>
 
   <script>
-    // — Only one accessToken
+    // 1) Mapbox token
     mapboxgl.accessToken = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
 
-    // — Config: only a single const block, no duplicates
+    // 2) Configuration
     const defaultCenter = [-71.245,42.254],
           defaultZoom   = 8,
           vectorLayerId = 'mbta-municipalities-by-compli-5gbi66',
-          tileField     = 'MBTA_Municipalities_data0k5Yh_1',
+          // tileField will be discovered by clicking
+          tileField     = 'UNKNOWN_YET',
           geojsonField  = 'MBTA_Municipalities_data0k5Yh_1',
           bounds        = [[-72.5,41.5],[-69.5,43.0]],
           geojsonURL    = './mbtacompliance.geojson';
 
     let municipalitiesData = [];
 
+    // 3) Initialize
     const map = new mapboxgl.Map({
       container: 'map',
       style:     'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',
@@ -48,6 +50,7 @@
       maxBounds: bounds
     });
 
+    // 4) Helpers
     function getFeatureBounds(feature) {
       const coords = feature.geometry.type === 'MultiPolygon'
         ? feature.geometry.coordinates.flat(2)
@@ -58,79 +61,83 @@
 
     function selectFeature(f) {
       const name = f.properties[geojsonField];
-      console.log('Selecting:', name);
       map.fitBounds(getFeatureBounds(f), { padding:40, duration:800 });
       map.setFilter('fade-layer', ['!=',['get',geojsonField], name]);
       map.setLayoutProperty('fade-layer','visibility','visible');
       map.getSource('highlight-town').setData({
-        type:'FeatureCollection', features:[f]
+        type:'FeatureCollection',
+        features:[f]
       });
       window.parent.postMessage({ type:'town-selected', properties:f.properties }, '*');
     }
 
     function clearSelection() {
-      console.log('Clearing');
       map.setLayoutProperty('fade-layer','visibility','none');
       map.getSource('highlight-town').setData({ type:'FeatureCollection', features:[] });
       map.flyTo({ center:defaultCenter, zoom:defaultZoom });
       window.parent.postMessage({ type:'clear-town' }, '*');
     }
 
+    // 5) On load: fetch GeoJSON & add layers
     map.on('load', () => {
-      // — Load GeoJSON once
+      // 5a) Load GeoJSON
       fetch(geojsonURL)
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(js => {
           municipalitiesData = js.features;
-          window.municipalitiesData = municipalitiesData; // for console inspection
-          console.log('Keys:', Object.keys(municipalitiesData[0].properties));
-          console.log('Loaded features:', municipalitiesData.length);
+          window.municipalitiesData = municipalitiesData; // for console
+          console.log('✅ Loaded features:', municipalitiesData.length);
         })
-        .catch(e => console.error('GeoJSON load error:', e));
+        .catch(e => console.error('❌ GeoJSON load error:', e));
 
-      // — Fade layer
+      // 5b) Fade layer
       map.addSource('municipalities-full', { type:'geojson', data:geojsonURL });
       map.addLayer({
-        id: 'fade-layer', type:'fill',
-        source: 'municipalities-full',
-        paint: { 'fill-color':'#888', 'fill-opacity':0.5 },
-        layout:{ visibility:'none' }
+        id: 'fade-layer', type:'fill', source:'municipalities-full',
+        paint:{'fill-color':'#888','fill-opacity':0.5},
+        layout:{visibility:'none'}
       });
 
-      // — Highlight layer
+      // 5c) Highlight layer
       map.addSource('highlight-town', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
       map.addLayer({ id:'highlight-fill', type:'fill', source:'highlight-town',
-        paint:{ 'fill-color':'#FFEB3B','fill-opacity':0.8 }});
+        paint:{'fill-color':'#FFEB3B','fill-opacity':0.8} });
       map.addLayer({ id:'highlight-line', type:'line', source:'highlight-town',
-        paint:{ 'line-color':'#FF9800','line-width':2 }});
+        paint:{'line-color':'#FF9800','line-width':2} });
 
-      // — Home button
+      // 5d) Home button
       document.getElementById('homeButton').onclick = clearSelection;
 
-      // — Click on vector layer
+      // 5e) Debug click handler
       map.on('click', vectorLayerId, e => {
-        if (!municipalitiesData.length) return;
-        const clicked = e.features[0].properties[tileField]?.toLowerCase().trim();
+        // **This log shows you the raw vector‐tile props**
+        console.log('🧩 Vector‐tile props:', e.features[0].properties);
+
+        // Existing logic (will still be undefined until you update tileField):
+        const clicked = e.features[0].properties[tileField];
         const match   = municipalitiesData.find(f =>
-          f.properties[geojsonField]?.toLowerCase().trim() === clicked
+          f.properties[geojsonField] === clicked
         );
-        match ? selectFeature(match) : console.warn('No match for', clicked);
+        if (match) selectFeature(match);
+        else console.warn('No match for:', clicked);
       });
     });
 
-    // — Parent frame messages
+    // 6) Parent messages (search/clear)
     window.addEventListener('message', e => {
       if (!municipalitiesData.length) return;
-      const msg = e.data;
-      if (msg.type === 'search-town') {
-        const term = msg.name.trim().toLowerCase();
+      if (e.data.type === 'search-town') {
+        const term = e.data.name.trim().toLowerCase();
         const match = municipalitiesData.find(f =>
-          f.properties[geojsonField]?.toLowerCase().trim() === term
+          f.properties[geojsonField].toLowerCase().trim() === term
         );
-        match ? selectFeature(match) : console.warn('Search not found:', term);
+        if (match) selectFeature(match);
+        else console.warn('Search not found:', term);
+      } else if (e.data.type === 'clear-town') {
+        clearSelection();
       }
-      else if (msg.type === 'clear-town') clearSelection();
     });
   </script>
+
 </body>
 </html>
