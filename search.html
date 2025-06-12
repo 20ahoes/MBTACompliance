@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="utf-8"/>
   <title>MBTA Compliance Search</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <style>
@@ -26,12 +26,12 @@
       color:#888; cursor:pointer; display:none;
     }
     .input-wrapper button:hover { color:#555; }
-    button#doSearch {
+    #doSearch {
       padding:8px 16px; font-size:16px;
       background:#005e95; color:#fff;
       border:none; border-radius:4px; cursor:pointer;
     }
-    button#doSearch:hover { background:#003f63; }
+    #doSearch:hover { background:#003f63; }
     iframe {
       width:100%; height:calc(100% - 60px); border:none;
     }
@@ -41,41 +41,44 @@
   <div class="search-panel">
     <div class="input-wrapper">
       <input id="townSearch" placeholder="Enter Town Name"/>
-      <button id="clearInput">✕</button>
+      <button id="clearInput" aria-label="Clear input">✕</button>
     </div>
     <button id="doSearch">Search</button>
   </div>
+
   <iframe id="mapFrame" src="map.html"></iframe>
 
   <script>
-    const input = document.getElementById('townSearch');
-    const btnSearch = document.getElementById('doSearch');
-    const btnClear = document.getElementById('clearInput');
-    const mapFrame = document.getElementById('mapFrame');
+    const input   = document.getElementById('townSearch'),
+          btnS    = document.getElementById('doSearch'),
+          btnC    = document.getElementById('clearInput'),
+          mapF    = document.getElementById('mapFrame');
 
     function toggleClear() {
-      btnClear.style.display = input.value ? 'block' : 'none';
+      btnC.style.display = input.value ? 'block' : 'none';
     }
 
     function doSearch() {
       const name = input.value.trim();
       if (!name) return;
-      mapFrame.contentWindow.postMessage({ type: 'search-town', name }, '*');
+      mapF.contentWindow.postMessage({ type:'search-town', name }, '*');
     }
 
     function clearAll() {
       input.value = '';
       toggleClear();
-      mapFrame.contentWindow.postMessage({ type: 'clear-town' }, '*');
+      mapF.contentWindow.postMessage({ type:'clear-town' }, '*');
       input.focus();
     }
 
-    btnSearch.addEventListener('click', doSearch);
+    btnS.addEventListener('click', doSearch);
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') doSearch();
       setTimeout(toggleClear, 0);
     });
-    btnClear.addEventListener('click', clearAll);
+    btnC.addEventListener('click', clearAll);
+
+    // init
     toggleClear();
   </script>
 </body>
