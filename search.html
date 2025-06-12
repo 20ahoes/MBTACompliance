@@ -1,29 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>Search Widget</title>
+  <meta charset="UTF-8">
+  <title>MBTA Compliance Search</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <style>
-    body, html { margin:0; padding:0; height:100%; }
+    html, body { margin:0; padding:0; height:100%; }
     .search-panel {
       height:60px; background:#f4f4f4;
       display:flex; align-items:center;
       padding:0 10px; gap:10px;
       box-shadow:0 2px 4px rgba(0,0,0,0.1);
+      z-index:10;
     }
     .input-wrapper { position:relative; flex:1; }
     .input-wrapper input {
       width:100%; padding:8px 30px 8px 8px;
-      box-sizing:border-box;
+      box-sizing:border-box; border:1px solid #ccc;
+      border-radius:4px; font-size:16px;
     }
     .input-wrapper button {
       position:absolute; right:8px; top:50%;
-      transform:translateY(-50%); border:none; background:none;
-      cursor:pointer; display:none;
+      transform:translateY(-50%);
+      border:none; background:none; font-size:16px;
+      color:#888; cursor:pointer; display:none;
     }
-    button#doSearch { padding:8px 16px; }
-    #mapFrame {
+    .input-wrapper button:hover { color:#555; }
+    button#doSearch {
+      padding:8px 16px; font-size:16px;
+      background:#005e95; color:#fff;
+      border:none; border-radius:4px; cursor:pointer;
+    }
+    button#doSearch:hover { background:#003f63; }
+    iframe {
       width:100%; height:calc(100% - 60px); border:none;
     }
   </style>
@@ -31,36 +40,42 @@
 <body>
   <div class="search-panel">
     <div class="input-wrapper">
-      <input type="text" id="townSearch" placeholder="Enter Town"/>
+      <input id="townSearch" placeholder="Enter Town Name"/>
       <button id="clearInput">✕</button>
     </div>
     <button id="doSearch">Search</button>
   </div>
-  <iframe id="mapFrame" src="map_with_button.html" ></iframe>
+  <iframe id="mapFrame" src="map_with_button.html"></iframe>
 
   <script>
-    const input   = document.getElementById('townSearch'),
-          btnS    = document.getElementById('doSearch'),
-          btnC    = document.getElementById('clearInput'),
-          iframe  = document.getElementById('mapFrame');
+    const input = document.getElementById('townSearch');
+    const btnSearch = document.getElementById('doSearch');
+    const btnClear = document.getElementById('clearInput');
+    const mapFrame = document.getElementById('mapFrame');
 
-    function toggleClear(){ btnC.style.display = input.value?'block':'none'; }
-    function runSearch(){
-      const t = input.value.trim();
-      if (!t) return;
-      iframe.contentWindow.postMessage({ type:'search-town', name:t }, '*');
-    }
-    function clearAll(){
-      input.value=''; toggleClear(); input.focus();
-      iframe.contentWindow.postMessage({ type:'clear-town' }, '*');
+    function toggleClear() {
+      btnClear.style.display = input.value ? 'block' : 'none';
     }
 
-    btnS.addEventListener('click', runSearch);
+    function doSearch() {
+      const name = input.value.trim();
+      if (!name) return;
+      mapFrame.contentWindow.postMessage({ type: 'search-town', name }, '*');
+    }
+
+    function clearAll() {
+      input.value = '';
+      toggleClear();
+      mapFrame.contentWindow.postMessage({ type: 'clear-town' }, '*');
+      input.focus();
+    }
+
+    btnSearch.addEventListener('click', doSearch);
     input.addEventListener('keydown', e => {
-      if (e.key==='Enter') runSearch();
-      setTimeout(toggleClear,0);
+      if (e.key === 'Enter') doSearch();
+      setTimeout(toggleClear, 0);
     });
-    btnC.addEventListener('click', clearAll);
+    btnClear.addEventListener('click', clearAll);
     toggleClear();
   </script>
 </body>
