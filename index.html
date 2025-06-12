@@ -7,87 +7,52 @@
 
   <!-- Mapbox GL JS & CSS -->
   <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
-  <link
-    href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css"
-    rel="stylesheet"
-  />
+  <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet"/>
 
-  <!-- Roboto & Material Icons -->
-  <link
-    href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap"
-    rel="stylesheet"
-  />
-  <link
-    href="https://fonts.googleapis.com/icon?family=Material+Icons"
-    rel="stylesheet"
-  />
+  <!-- Roboto & Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
 
   <style>
-    html, body {
-      margin: 0; padding: 0; height: 100%;
-      font-family: 'Roboto', sans-serif;
-    }
-    /* Search Bar */
+    html, body { margin:0; padding:0; height:100%; font-family:'Roboto',sans-serif; }
     .search-panel {
-      position: absolute; top: 0; left: 0; right: 0;
-      height: 60px; background: #f4f4f4;
-      display: flex; align-items: center;
-      padding: 0 20px; gap: 10px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      z-index: 10;
+      position:absolute; top:0; left:0; right:0; height:60px;
+      background:#f4f4f4; display:flex; align-items:center;
+      padding:0 20px; gap:10px; box-shadow:0 2px 4px rgba(0,0,0,0.1); z-index:10;
     }
-    .input-wrapper {
-      position: relative; flex: 1;
-    }
+    .input-wrapper { position:relative; flex:1; }
     .input-wrapper input {
-      width: 100%; padding: 8px 30px 8px 8px;
-      font-size: 16px; border: 1px solid #ccc; border-radius: 4px;
-      box-sizing: border-box;
+      width:100%; padding:8px 30px 8px 8px; box-sizing:border-box;
+      border:1px solid #ccc; border-radius:4px; font-size:16px;
     }
-    .input-wrapper button#clearInput {
-      position: absolute; right: 8px; top: 50%;
-      transform: translateY(-50%);
-      border: none; background: none; font-size: 16px;
-      color: #888; cursor: pointer; display: none;
+    .input-wrapper button {
+      position:absolute; right:8px; top:50%; transform:translateY(-50%);
+      border:none; background:none; font-size:16px; color:#888; cursor:pointer;
+      display:none;
     }
-    .input-wrapper button#clearInput:hover {
-      color: #555;
+    .input-wrapper button:hover { color:#555; }
+    #doSearch {
+      padding:8px 16px; font-size:16px; font-weight:700;
+      background:#005e95; color:#fff; border:none; border-radius:4px; cursor:pointer;
     }
-    .search-panel button#doSearch {
-      padding: 8px 16px; font-size: 16px; font-weight: 700;
-      background: #005e95; color: #fff;
-      border: none; border-radius: 4px; cursor: pointer;
-    }
-    .search-panel button#doSearch:hover {
-      background: #003f63;
-    }
-
-    /* Map & Home Button */
-    #map {
-      position: absolute; top: 60px; bottom: 0; width: 100%;
-    }
+    #doSearch:hover { background:#003f63; }
+    #map { position:absolute; top:60px; bottom:0; width:100%; }
     #homeButton {
-      position: absolute; top: 70px; left: 20px; z-index: 5;
-      padding: 10px; background: rgba(255,255,255,0.9);
-      border: none; border-radius: 8px; cursor: pointer;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      position:absolute; top:70px; left:20px; z-index:5;
+      padding:10px; background:rgba(255,255,255,0.9); border:none;
+      border-radius:8px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3);
     }
-    #homeButton:hover {
-      background: rgba(255,255,255,1);
-    }
-    .material-icons {
-      font-size: 24px;
-      color: #005e95;
-    }
+    #homeButton:hover { background:rgba(255,255,255,1); }
+    .material-icons { font-size:24px; color:#005e95; }
   </style>
 </head>
 <body>
 
-  <!-- Search Panel -->
+  <!-- Search UI -->
   <div class="search-panel">
     <div class="input-wrapper">
-      <input type="text" id="townSearch" placeholder="Enter Town Name"/>
-      <button id="clearInput" aria-label="Clear input">✕</button>
+      <input id="townSearch" placeholder="Enter Town Name"/>
+      <button id="clearInput">✕</button>
     </div>
     <button id="doSearch">Search</button>
   </div>
@@ -97,20 +62,21 @@
     <span class="material-icons">home</span>
   </button>
 
-  <!-- Map Container -->
+  <!-- Map -->
   <div id="map"></div>
 
   <script>
-    // --- Constants ---
+    // Access token & constants
     mapboxgl.accessToken = 'pk.eyJ1IjoiMjBhaG9lcyIsImEiOiJjbWFwazQxbDgwaXMzMmxwbzJmNmhidm0yIn0.NileAvzC_m2asZI3tLIqUw';
     const defaultCenter = [-71.245, 42.254],
           defaultZoom   = 8.8,
           layerId       = 'mbta-municipalities-by-compli-5gbi66',
-          nameField     = 'Municipali';
+          nameField     = 'Municipali',
+          geojsonURL    = './3A_Communities_by_Compliance_Status.geojson';
 
-    let allFeatures = [];
+    let complianceData = [];
 
-    // --- Initialize Map ---
+    // Initialize map
     const map = new mapboxgl.Map({
       container: 'map',
       style: 'mapbox://styles/20ahoes/cmbtl7zn9002x01s9a2nk0izb',
@@ -118,99 +84,90 @@
       zoom: defaultZoom
     });
 
-    // --- Helpers ---
-    function getBounds(feature) {
-      const coords = feature.geometry.type === 'MultiPolygon'
-        ? feature.geometry.coordinates.flat(2)
-        : feature.geometry.coordinates[0];
-      return coords.reduce(
-        (bounds, pt) => bounds.extend(pt),
-        new mapboxgl.LngLatBounds()
-      );
-    }
-    function highlightFeature(feature) {
-      // Zoom to its bounds
-      map.fitBounds(getBounds(feature), { padding: 40, speed: 1.2, essential: true });
-      // Show highlight
-      map.getSource('highlight').setData({
-        type: 'FeatureCollection',
-        features: [feature]
-      });
-    }
-    function resetView() {
-      map.flyTo({ center: defaultCenter, zoom: defaultZoom, speed: 1.2, essential: true });
-      map.getSource('highlight').setData({ type: 'FeatureCollection', features: [] });
-    }
-
-    // --- On Map Load ---
+    // Highlight layer
     map.on('load', () => {
-      // Cache all rendered features from that vector layer
-      allFeatures = map.queryRenderedFeatures({ layers: [layerId] });
+      // 1) Load full GeoJSON
+      fetch(geojsonURL)
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => {
+          complianceData = data.features;
+        })
+        .catch(err => console.error('GeoJSON load failed:', err));
 
-      // Add highlight source + layers
-      map.addSource('highlight', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] }
+      // 2) Add highlight source/layers
+      map.addSource('highlight', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
+      map.addLayer({
+        id:'hl-fill', type:'fill', source:'highlight',
+        paint:{ 'fill-color':'#FFEB3B','fill-opacity':0.8 }
       });
       map.addLayer({
-        id: 'highlight-fill',
-        type: 'fill',
-        source: 'highlight',
-        paint: { 'fill-color': '#FFEB3B', 'fill-opacity': 0.8 }
-      });
-      map.addLayer({
-        id: 'highlight-line',
-        type: 'line',
-        source: 'highlight',
-        paint: { 'line-color': '#FF9800', 'line-width': 2 }
+        id:'hl-line', type:'line', source:'highlight',
+        paint:{ 'line-color':'#FF9800','line-width':2 }
       });
 
-      // Click-to-select a municipality
+      // 3) Click-to-select on vector layer
       map.on('click', layerId, e => {
-        const props = e.features[0].properties;
-        const match = allFeatures.find(f => f.properties[nameField] === props[nameField]);
-        if (match) highlightFeature(match);
+        const clicked = e.features[0].properties[nameField];
+        const match = complianceData.find(f => f.properties[nameField] === clicked);
+        if (match) highlightAndZoom(match);
       });
 
-      // Wire up the Home button
+      // 4) Home button
       document.getElementById('homeButton').onclick = resetView;
     });
 
-    // --- Search UI Logic ---
-    const input   = document.getElementById('townSearch'),
-          btnS    = document.getElementById('doSearch'),
-          btnC    = document.getElementById('clearInput');
+    // Helpers
+    function getBounds(feature) {
+      const coords = feature.geometry.type==='MultiPolygon'
+        ? feature.geometry.coordinates.flat(2)
+        : feature.geometry.coordinates[0];
+      return coords.reduce(
+        (b,c)=>b.extend(c),
+        new mapboxgl.LngLatBounds()
+      );
+    }
+    function highlightAndZoom(feature) {
+      map.fitBounds(getBounds(feature), { padding:40, speed:1.2, essential:true });
+      map.getSource('highlight').setData({ type:'FeatureCollection', features:[feature] });
+    }
+    function resetView() {
+      map.flyTo({ center: defaultCenter, zoom: defaultZoom, speed:1.2, essential:true });
+      map.getSource('highlight').setData({ type:'FeatureCollection', features:[] });
+    }
+
+    // Search UI logic
+    const input = document.getElementById('townSearch'),
+          btnSearch = document.getElementById('doSearch'),
+          btnClear  = document.getElementById('clearInput');
 
     function toggleClearIcon() {
-      btnC.style.display = input.value ? 'block' : 'none';
+      btnClear.style.display = input.value ? 'block' : 'none';
     }
 
     function doSearch() {
       const term = input.value.trim().toLowerCase();
       if (!term) return;
-      const match = allFeatures.find(f =>
+      const match = complianceData.find(f =>
         f.properties[nameField]?.toLowerCase() === term
       );
       if (match) {
-        highlightFeature(match);
+        highlightAndZoom(match);
       } else {
         alert('❌ Town not found');
       }
     }
 
-    btnS.addEventListener('click', doSearch);
+    btnSearch.addEventListener('click', doSearch);
     input.addEventListener('keydown', e => {
       if (e.key === 'Enter') doSearch();
       setTimeout(toggleClearIcon, 0);
     });
-    btnC.addEventListener('click', () => {
+    btnClear.addEventListener('click', () => {
       input.value = '';
       toggleClearIcon();
       resetView();
       input.focus();
     });
-
-    // initialize clear icon
     toggleClearIcon();
   </script>
 </body>
