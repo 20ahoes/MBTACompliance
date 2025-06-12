@@ -14,13 +14,19 @@
   <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet"/>
 
   <style>
-    body, html { margin:0; padding:0; height:100%; font-family:'Roboto',sans-serif; }
-    #map { position:absolute; top:0; bottom:0; width:100%; }
+    body, html {
+      margin:0; padding:0; height:100%;
+      font-family:'Roboto',sans-serif;
+    }
+    #map {
+      position:absolute; top:0; bottom:0; width:100%;
+    }
     #homeButton {
       position:absolute; top:10px; left:10px; z-index:2;
       padding:10px 20px; font-size:16px; font-weight:700;
       background:rgba(255,255,255,0.9); color:#005e95; border:none;
-      border-radius:8px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.3);
+      border-radius:8px; cursor:pointer;
+      box-shadow:0 2px 6px rgba(0,0,0,0.3);
       backdrop-filter:blur(4px);
     }
     .material-icons { font-size:24px; }
@@ -65,20 +71,21 @@
     }
 
     function selectFeature(feature) {
-      // zoom to full polygon
       const bb = getFeatureBounds(feature);
       map.fitBounds(bb, { padding: 40, duration: 800 });
+
       // de-emphasize others
-      map.setLayoutProperty('fade-layer', 'visibility', 'visible');
       map.setFilter('fade-layer',
         ['!=', ['get', geojsonField], feature.properties[geojsonField]]
       );
+      map.setLayoutProperty('fade-layer', 'visibility', 'visible');
+
       // highlight selected
       map.getSource('highlight-town').setData({
         type: 'FeatureCollection',
         features: [feature]
       });
-      // notify parent
+
       window.parent.postMessage({
         type: 'town-selected',
         properties: feature.properties
@@ -86,7 +93,7 @@
     }
 
     function clearSelection() {
-      // reset fade-layer to show all
+      // show all
       map.setFilter('fade-layer', null);
       map.flyTo({ center: defaultCenter, zoom: defaultZoom, speed: 1.2, essential: true });
       map.getSource('highlight-town').setData({ type:'FeatureCollection', features:[] });
@@ -94,44 +101,52 @@
     }
 
     map.on('load', () => {
-      // load GeoJSON into memory
+      // load GeoJSON
       fetch(geojsonURL)
         .then(r => r.ok ? r.json() : Promise.reject(r.status))
         .then(data => municipalitiesData = data.features)
         .catch(err => console.error('GeoJSON load failed:', err));
 
-      // add full GeoJSON fill layer (always visible)
+      // ---------- Compliance fill (now solid) ----------
       map.addSource('municipalities-full', { type:'geojson', data:geojsonURL });
       map.addLayer({
         id: 'fade-layer',
         type: 'fill',
         source: 'municipalities-full',
-        paint: { 'fill-color': '#888','fill-opacity': 0.5 },
-        layout: { visibility: 'visible' }
+        paint: {
+          'fill-color': '#888',
+          'fill-opacity': 1         // ← solid fill, no transparency
+        },
+        layout: {
+          visibility: 'visible'
+        }
       });
 
-      // add highlight layers
-      map.addSource('highlight-town', { type:'geojson', data:{ type:'FeatureCollection', features:[] } });
-      map.addLayer({
-        id: 'highlight-fill',
-        type: 'fill',
-        source: 'highlight-town',
-        paint: { 'fill-color': '#FFEB3B','fill-opacity': 0.8 }
+      // ---------- Highlight layers ----------
+      map.addSource('highlight-town', {
+        type:'geojson',
+        data:{ type:'FeatureCollection', features:[] }
       });
       map.addLayer({
-        id: 'highlight-line',
-        type: 'line',
-        source: 'highlight-town',
-        paint: { 'line-color': '#FF9800','line-width': 2 }
+        id:'highlight-fill',
+        type:'fill',
+        source:'highlight-town',
+        paint:{ 'fill-color':'#FFEB3B','fill-opacity':0.8 }
+      });
+      map.addLayer({
+        id:'highlight-line',
+        type:'line',
+        source:'highlight-town',
+        paint:{ 'line-color':'#FF9800','line-width':2 }
       });
 
-      // home/reset
+      // Home/Reset
       document.getElementById('homeButton').onclick = clearSelection;
 
-      // click on fade-layer
+      // Click on the fill layer
       map.on('click', 'fade-layer', e => {
         if (!municipalitiesData.length) return;
-        const props = e.features[0].properties;
+        const props   = e.features[0].properties;
         const feature = municipalitiesData.find(
           f => f.properties[geojsonField] === props[geojsonField]
         );
@@ -139,16 +154,18 @@
       });
     });
 
-    // parent messaging: search & clear
+    // Parent messaging
     window.addEventListener('message', e => {
       const msg = e.data;
+      if (!municipalitiesData.length) return;
       if (msg?.type === 'search-town') {
         const term = msg.name.trim().toLowerCase();
         const feature = municipalitiesData.find(
           f => f.properties[geojsonField]?.toLowerCase() === term
         );
         if (feature) selectFeature(feature);
-      } else if (msg?.type === 'clear-town') {
+      }
+      else if (msg?.type === 'clear-town') {
         clearSelection();
       }
     });
