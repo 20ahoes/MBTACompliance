@@ -5,10 +5,11 @@
   <title>MBTA Municipalities Explorer</title>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet"/>
   <style>
-    /* …your existing CSS… */
+    /* …all your existing CSS… */
   </style>
 </head>
 <body>
+
   <!-- Intro Overlay -->
   <div id="introOverlay">
     <div id="introPopup">
@@ -18,7 +19,7 @@
   </div>
 
   <div id="container">
-    <!-- …your legend & info panel… -->
+    <!-- … your legend & info‐panel markup … -->
 
     <div id="main">
       <div class="search-panel">
@@ -28,74 +29,49 @@
         </div>
         <button id="doSearch">Search</button>
       </div>
-      <iframe
-        id="mapFrame"
-        src="map_with_buttons.html?cachebust=1"
-        title="Map View"
-      ></iframe>
+      <iframe id="mapFrame" src="map_with_buttons.html?cachebust=1" title="Map View"></iframe>
     </div>
   </div>
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
-      const intro      = document.getElementById('introOverlay'),
-            startBtn   = document.getElementById('startButton'),
-            container  = document.getElementById('container'),
-            mapFrame   = document.getElementById('mapFrame'),
-            input      = document.getElementById('townSearch'),
-            btnSearch  = document.getElementById('doSearch'),
-            btnClearIn = document.getElementById('clearInput'),
-            btnClose   = document.getElementById('closePanel');
+      const intro     = document.getElementById('introOverlay');
+      const startBtn  = document.getElementById('startButton');
+      const container = document.getElementById('container');
+      const mapFrame  = document.getElementById('mapFrame');
+      const input     = document.getElementById('townSearch');
+      const btnSearch = document.getElementById('doSearch');
+      const btnClear  = document.getElementById('clearInput');
+      const btnClose  = document.getElementById('closePanel'); // your X in the info panel
 
-      startBtn.addEventListener('click', () => {
-        intro.style.display = 'none';
-      });
+      startBtn.addEventListener('click', () => intro.style.display = 'none');
 
       function clearAll() {
-        console.log('[parent] clearAll');
         mapFrame.contentWindow.postMessage({ type:'clear-town' }, '*');
         container.classList.remove('info-open');
       }
 
       function runSearch() {
         const name = input.value.trim();
-        console.log('[parent] runSearch:', name);
         if (!name) return;
         mapFrame.contentWindow.postMessage({ type:'search-town', name }, '*');
       }
 
-      btnSearch.addEventListener('click', runSearch);
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter') runSearch();
-        setTimeout(() => {
-          btnClearIn.style.display = input.value ? 'block' : 'none';
-        }, 0);
-      });
-      btnClearIn.addEventListener('click', () => {
-        input.value = '';
-        btnClearIn.style.display = 'none';
-        clearAll();
-        input.focus();
-      });
+      btnSearch .addEventListener('click', runSearch);
+      input     .addEventListener('keydown', e => { if (e.key==='Enter') runSearch(); });
+      btnClear  .addEventListener('click', () => { input.value=''; clearAll(); });
 
-      // Listen for messages from the map iframe
+      // Listen for map → parent messages
       window.addEventListener('message', e => {
-        console.log('[parent] got message:', e.data);
         const msg = e.data;
-        if (msg.type === 'town-selected') {
+        if (msg?.type === 'town-selected') {
           const p = msg.properties;
-          document.getElementById('townName').textContent  = p.MBTA_Municipalities_data0k5Yh_1 || 'N/A';
-          document.getElementById('popField').textContent  = p.MBTA_Municipalities_MBTAStation   || 'N/A';
+          document.getElementById('townName') .textContent = p.MBTA_Municipalities_data0k5Yh_1  || 'N/A';
+          document.getElementById('popField') .textContent = p.MBTA_Municipalities_MBTAStation   || 'N/A';
           document.getElementById('compField').textContent = p.Compliance_Status_Sheet_as_of_6  || 'N/A';
-          document.getElementById('compactField').textContent = p.Compliance_Status_Sheet_as_of_7 || 'N/A';
-          document.getElementById('compdeadField').textContent = p.Compliance_Status_Sheet_as_of_8 || 'N/A';
+          document.getElementById('compactField').textContent = p.Compliance_Status_Sheet_as_of_7|| 'N/A';
+          document.getElementById('compdeadField').textContent = p.Compliance_Status_Sheet_as_of_8|| 'N/A';
           container.classList.add('info-open');
         }
-        else if (msg.type === 'clear-town') {
-          clearAll();
-        }
-      });
-    });
-  </script>
-</body>
-</html>
+        else if (msg?.type === 'clear-town') {
+          // parent ignores map’s clear-town echoes
